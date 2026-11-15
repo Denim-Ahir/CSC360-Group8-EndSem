@@ -1,20 +1,31 @@
+
 package com.csc360.gui;
 
+import com.csc360.utils.ImageValidator;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.io.File;
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
  * Main desktop window for ImageLite.
  */
 public final class MainWindow extends JFrame {
+
+    private File selectedImageFile;
+    private JLabel selectedFileLabel;
 
     public MainWindow() {
         super("ImageLite - Image Compressor");
@@ -38,16 +49,65 @@ public final class MainWindow extends JFrame {
         previews.add(createPlaceholder("Compressed image"));
         root.add(previews, BorderLayout.CENTER);
 
-        JPanel controls = new JPanel();
+        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT));
         controls.setBorder(BorderFactory.createTitledBorder("Image settings"));
+
+        JButton browseButton = new JButton("Browse Image");
+        browseButton.addActionListener(event -> selectImage());
+
+        selectedFileLabel = new JLabel("No image selected");
+
+        controls.add(browseButton);
+        controls.add(selectedFileLabel);
+
         root.add(controls, BorderLayout.SOUTH);
+
         return root;
+    }
+
+    private void selectImage() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select an Image");
+
+        FileNameExtensionFilter filter =
+                new FileNameExtensionFilter(
+                        "Image Files (JPG, JPEG, PNG)",
+                        "jpg", "jpeg", "png"
+                );
+
+        fileChooser.setFileFilter(filter);
+
+        int result = fileChooser.showOpenDialog(this);
+
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+
+            try {
+                ImageValidator.validateImage(file);
+
+                selectedImageFile = file;
+                selectedFileLabel.setText(file.getName());
+
+            } catch (IllegalArgumentException exception) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        exception.getMessage(),
+                        "Invalid Image",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            }
+        }
     }
 
     private JPanel createPlaceholder(String title) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder(title));
-        panel.add(new JLabel("No image selected", SwingConstants.CENTER), BorderLayout.CENTER);
+
+        panel.add(
+                new JLabel("No image selected", SwingConstants.CENTER),
+                BorderLayout.CENTER
+        );
+
         return panel;
     }
 }
