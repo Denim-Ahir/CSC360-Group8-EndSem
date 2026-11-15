@@ -15,11 +15,20 @@ import javax.imageio.ImageIO;
 public final class ImageProcessingService {
 
     public ImageProcessingResult process(File source, int qualityPercent) throws IOException {
+        return process(source, new ImageProcessingOptions(qualityPercent));
+    }
+
+    public ImageProcessingResult process(File source, ImageProcessingOptions options)
+            throws IOException {
+        if (options == null) {
+            throw new IllegalArgumentException("Processing options cannot be null.");
+        }
         ImageValidator.validateImage(source);
 
         BufferedImage sourceImage = ImageLoader.loadImage(source);
         BufferedImage jpegReadyImage = ImageConverter.convertToRGB(sourceImage);
-        byte[] jpegBytes = ImageCompressor.compressToJpeg(jpegReadyImage, qualityPercent);
+        byte[] jpegBytes = ImageCompressor.compressToJpeg(jpegReadyImage,
+                options.qualityPercent());
         BufferedImage compressedPreview = ImageIO.read(new ByteArrayInputStream(jpegBytes));
         if (compressedPreview == null) {
             throw new IOException("The JPEG writer produced unreadable output.");
