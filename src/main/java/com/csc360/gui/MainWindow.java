@@ -1,6 +1,8 @@
 
 package com.csc360.gui;
 
+import com.csc360.compression.ImageProcessingResult;
+import com.csc360.compression.ImageProcessingService;
 import com.csc360.imageprocessing.ImageLoader;
 import com.csc360.utils.ImageValidator;
 
@@ -38,6 +40,13 @@ public final class MainWindow extends JFrame {
     private JLabel originalPreviewLabel;
     private BufferedImage originalImage;
 
+    private JPanel compressedPreviewPanel;
+    private JLabel compressedPreviewLabel;
+    private BufferedImage compressedImage;
+
+    private final ImageProcessingService processingService =
+            new ImageProcessingService();
+
     public MainWindow() {
         super("ImageLite - Image Compressor");
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -58,8 +67,10 @@ public final class MainWindow extends JFrame {
         JPanel previews = new JPanel(new GridLayout(1, 2, 12, 0));
 
         originalPreviewPanel = createOriginalPreview();
+        compressedPreviewPanel = createCompressedPreview();
+
         previews.add(originalPreviewPanel);
-        previews.add(createPlaceholder("Compressed image"));
+        previews.add(compressedPreviewPanel);
 
         root.add(previews, BorderLayout.CENTER);
 
@@ -69,9 +80,13 @@ public final class MainWindow extends JFrame {
         JButton browseButton = new JButton("Browse Image");
         browseButton.addActionListener(event -> selectImage());
 
+        JButton compressButton = new JButton("Compress Image");
+        compressButton.addActionListener(event -> compressImage());
+
         selectedFileLabel = new JLabel("No image selected");
 
         controls.add(browseButton);
+        controls.add(compressButton);
         controls.add(selectedFileLabel);
 
         root.add(controls, BorderLayout.SOUTH);
@@ -93,6 +108,26 @@ public final class MainWindow extends JFrame {
             public void componentResized(
                     java.awt.event.ComponentEvent event) {
                 updateOriginalPreview();
+            }
+        });
+
+        return panel;
+    }
+
+    private JPanel createCompressedPreview() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createTitledBorder("Compressed image"));
+
+        compressedPreviewLabel =
+                new JLabel("No compressed image yet", SwingConstants.CENTER);
+
+        panel.add(compressedPreviewLabel, BorderLayout.CENTER);
+
+        panel.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(
+                    java.awt.event.ComponentEvent event) {
+                updateCompressedPreview();
             }
         });
 
@@ -125,6 +160,10 @@ public final class MainWindow extends JFrame {
                 selectedImageFile = file;
                 originalImage = loadedImage;
 
+                compressedImage = null;
+                compressedPreviewLabel.setIcon(null);
+                compressedPreviewLabel.setText("No compressed image yet");
+
                 selectedFileLabel.setText(file.getName());
 
                 updateOriginalPreview();
@@ -140,6 +179,35 @@ public final class MainWindow extends JFrame {
         }
     }
 
+    private void compressImage() {
+        if (selectedImageFile == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Please select an image first.",
+                    "No Image Selected",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        try {
+            ImageProcessingResult result =
+                    processingService.process(selectedImageFile, 60);
+
+            compressedImage = result.getCompressedPreview();
+
+            updateCompressedPreview();
+
+        } catch (IOException | IllegalArgumentException exception) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    exception.getMessage(),
+                    "Compression Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
     private void updateOriginalPreview() {
         if (originalImage == null || originalPreviewPanel == null) {
             return;
@@ -152,40 +220,51 @@ public final class MainWindow extends JFrame {
             return;
         }
 
-        double widthRatio =
-                (double) panelWidth / originalImage.getWidth();
-
-        double heightRatio =
-                (double) panelHeight / originalImage.getHeight();
-
-        double scale = Math.min(widthRatio, heightRatio);
-        scale = Math.min(scale, 1.0);
-
-        int newWidth =
-                Math.max(1, (int) (originalImage.getWidth() * scale));
-
-        int newHeight =
-                Math.max(1, (int) (originalImage.getHeight() * scale));
-
-        Image scaledImage = originalImage.getScaledInstance(
-                newWidth,
-                newHeight,
-                Image.SCALE_SMOOTH
-        );
+        Image scaledImage = scaleImage(
+                originalImage, panelWidth, panelHeight);
 
         originalPreviewLabel.setText(null);
         originalPreviewLabel.setIcon(new ImageIcon(scaledImage));
     }
 
-    private JPanel createPlaceholder(String title) {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createTitledBorder(title));
+    private void updateCompressedPreview() {
+        if (compressedImage == null || compressedPreviewPanel == null) {
+            return;
+        }
 
-        panel.add(
-                new JLabel("No image selected", SwingConstants.CENTER),
-                BorderLayout.CENTER
-        );
+        int panelWidth = compressedPreviewPanel.getWidth() - 20;
+        int panelHeight = compressedPreviewPanel.getHeight() - 45;
 
-        return panel;
+        if (panelWidth <= 0 || panelHeight <= 0) {
+            return;
+        }
+
+        Image scaledImage = scaleImage(
+                compressedImage, panelWidth, panelHeight);
+
+        compressedPreviewLabel.setText(null);
+        compressedPreviewLabel.setIcon(new ImageIcon(scaledImage));
+    }
+
+    private Image scaleImage(
+            BufferedImage image, int panelWidth, int panelHeight) {
+
+        double widthRatio =
+                (double) panelWidth / image.getWidth();
+
+        double heightRatio =
+                (double) panelHeight / image.getHeight();
+
+        double scale = Math.min(widthRatio, heightRatio);
+        scale = Math.min(scale, 1.0);
+
+        int newWidth =
+                Math.max(1, (int) (image.getWidth() * scale));
+
+        int newHeight =
+                Math.max(1, (int) (image.getHeight() * scale));
+
+        return image.getScaledInstance(
+                newWidth, newHeight, Image.SCALE_SMOOTH);
     }
 }
