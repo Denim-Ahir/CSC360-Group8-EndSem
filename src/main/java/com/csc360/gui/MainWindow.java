@@ -1,6 +1,7 @@
 
 package com.csc360.gui;
 
+import com.csc360.compression.ImageProcessingOptions;
 import com.csc360.compression.ImageProcessingResult;
 import com.csc360.compression.ImageProcessingService;
 import com.csc360.imageprocessing.ImageLoader;
@@ -19,14 +20,18 @@ import java.io.IOException;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
+import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
@@ -47,6 +52,12 @@ public final class MainWindow extends JFrame {
 
     private JSlider qualitySlider;
     private JLabel qualityValueLabel;
+
+    private JTextField widthField;
+    private JTextField heightField;
+    private JCheckBox preserveAspectRatioCheckBox;
+
+    private boolean updatingDimensions;
 
     private final ImageProcessingService processingService =
             new ImageProcessingService();
@@ -101,11 +112,28 @@ public final class MainWindow extends JFrame {
                 qualityValueLabel.setText(
                         qualitySlider.getValue() + "%"));
 
+        widthField = new JTextField(5);
+        heightField = new JTextField(5);
+
+        preserveAspectRatioCheckBox =
+                new JCheckBox("Preserve aspect ratio", true);
+
+        addDimensionListeners();
+
         controls.add(browseButton);
         controls.add(compressButton);
+
         controls.add(new JLabel("Quality:"));
         controls.add(qualitySlider);
         controls.add(qualityValueLabel);
+
+        controls.add(new JLabel("Width:"));
+        controls.add(widthField);
+
+        controls.add(new JLabel("Height:"));
+        controls.add(heightField);
+
+        controls.add(preserveAspectRatioCheckBox);
         controls.add(selectedFileLabel);
 
         root.add(controls, BorderLayout.SOUTH);
@@ -153,6 +181,98 @@ public final class MainWindow extends JFrame {
         return panel;
     }
 
+    private void addDimensionListeners() {
+        widthField.getDocument().addDocumentListener(
+                new DocumentListener() {
+                    @Override
+                    public void insertUpdate(DocumentEvent event) {
+                        updateHeightFromWidth();
+                    }
+
+                    @Override
+                    public void removeUpdate(DocumentEvent event) {
+                        updateHeightFromWidth();
+                    }
+
+                    @Override
+                    public void changedUpdate(DocumentEvent event) {
+                        updateHeightFromWidth();
+                    }
+                });
+
+        heightField.getDocument().addDocumentListener(
+                new DocumentListener() {
+                    @Override
+                    public void insertUpdate(DocumentEvent event) {
+                        updateWidthFromHeight();
+                    }
+
+                    @Override
+                    public void removeUpdate(DocumentEvent event) {
+                        updateWidthFromHeight();
+                    }
+
+                    @Override
+                    public void changedUpdate(DocumentEvent event) {
+                        updateWidthFromHeight();
+                    }
+                });
+    }
+
+    private void updateHeightFromWidth() {
+        if (updatingDimensions || originalImage == null
+                || !preserveAspectRatioCheckBox.isSelected()) {
+            return;
+        }
+
+        try {
+            int width = Integer.parseInt(widthField.getText().trim());
+
+            if (width <= 0) {
+                return;
+            }
+
+            int height = Math.max(1, (int) Math.round(
+                    originalImage.getHeight()
+                            * (width / (double) originalImage.getWidth())));
+
+            updatingDimensions = true;
+            heightField.setText(String.valueOf(height));
+
+        } catch (NumberFormatException exception) {
+            // Wait until a valid width is entered.
+        } finally {
+            updatingDimensions = false;
+        }
+    }
+
+    private void updateWidthFromHeight() {
+        if (updatingDimensions || originalImage == null
+                || !preserveAspectRatioCheckBox.isSelected()) {
+            return;
+        }
+
+        try {
+            int height = Integer.parseInt(heightField.getText().trim());
+
+            if (height <= 0) {
+                return;
+            }
+
+            int width = Math.max(1, (int) Math.round(
+                    originalImage.getWidth()
+                            * (height / (double) originalImage.getHeight())));
+
+            updatingDimensions = true;
+            widthField.setText(String.valueOf(width));
+
+        } catch (NumberFormatException exception) {
+            // Wait until a valid height is entered.
+        } finally {
+            updatingDimensions = false;
+        }
+    }
+
     private void selectImage() {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Select an Image");
@@ -185,9 +305,16 @@ public final class MainWindow extends JFrame {
 
                 selectedFileLabel.setText(file.getName());
 
+                updatingDimensions = true;
+                widthField.setText(String.valueOf(originalImage.getWidth()));
+                heightField.setText(String.valueOf(originalImage.getHeight()));
+                updatingDimensions = false;
+
                 updateOriginalPreview();
 
             } catch (IllegalArgumentException | IOException exception) {
+                updatingDimensions = false;
+
                 JOptionPane.showMessageDialog(
                         this,
                         exception.getMessage(),
@@ -210,15 +337,38 @@ public final class MainWindow extends JFrame {
         }
 
         try {
-            int selectedQuality = qualitySlider.getValue();
+            int quality = qualitySlider.getValue();
+
+            int width = Integer.parseInt(widthField.getText().trim());
+            int height = Integer.parseInt(heightField.getText().trim());
+
+            if (width <= 0 || height <= 0) {
+                throw new IllegalArgumentException(
+                        "Width and height must be greater than zero.");
+            }
+
+            ImageProcessingOptions options =
+                    ImageProcessingOptions.resized(
+                            quality,
+                            width,
+                            height,
+                            preserveAspectRatioCheckBox.isSelected()
+                    );
 
             ImageProcessingResult result =
-                    processingService.process(
-                            selectedImageFile, selectedQuality);
+                    processingService.process(selectedImageFile, options);
 
             compressedImage = result.getCompressedPreview();
 
             updateCompressedPreview();
+
+        } catch (NumberFormatException exception) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Please enter valid numeric width and height values.",
+                    "Invalid Dimensions",
+                    JOptionPane.ERROR_MESSAGE
+            );
 
         } catch (IOException | IllegalArgumentException exception) {
             JOptionPane.showMessageDialog(
