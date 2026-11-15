@@ -4,6 +4,7 @@ package com.csc360.gui;
 import com.csc360.compression.ImageProcessingOptions;
 import com.csc360.compression.ImageProcessingResult;
 import com.csc360.compression.ImageProcessingService;
+import com.csc360.compression.CompressionMetrics;
 import com.csc360.imageprocessing.ImageLoader;
 import com.csc360.utils.ImageValidator;
 
@@ -60,6 +61,12 @@ public final class MainWindow extends JFrame {
 
     private JButton saveButton;
 
+    private JLabel originalSizeLabel;
+    private JLabel compressedSizeLabel;
+    private JLabel bytesSavedLabel;
+    private JLabel reductionLabel;
+    private JLabel ratioLabel;
+
     private ImageProcessingResult compressedResult;
     private boolean updatingDimensions;
 
@@ -69,8 +76,8 @@ public final class MainWindow extends JFrame {
     public MainWindow() {
         super("ImageLite - Image Compressor");
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(900, 600));
-        setSize(1100, 720);
+        setMinimumSize(new Dimension(1000, 700));
+        setSize(1200, 850);
         setLocationRelativeTo(null);
         setContentPane(buildContent());
     }
@@ -83,6 +90,8 @@ public final class MainWindow extends JFrame {
         heading.setFont(heading.getFont().deriveFont(Font.BOLD, 26f));
         root.add(heading, BorderLayout.NORTH);
 
+        JPanel center = new JPanel(new BorderLayout(12, 12));
+
         JPanel previews = new JPanel(new GridLayout(1, 2, 12, 0));
 
         originalPreviewPanel = createOriginalPreview();
@@ -91,8 +100,16 @@ public final class MainWindow extends JFrame {
         previews.add(originalPreviewPanel);
         previews.add(compressedPreviewPanel);
 
-        root.add(previews, BorderLayout.CENTER);
+        center.add(previews, BorderLayout.CENTER);
+        center.add(createResultsPanel(), BorderLayout.SOUTH);
 
+        root.add(center, BorderLayout.CENTER);
+        root.add(createControlsPanel(), BorderLayout.SOUTH);
+
+        return root;
+    }
+
+    private JPanel createControlsPanel() {
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT));
         controls.setBorder(BorderFactory.createTitledBorder("Image settings"));
 
@@ -117,8 +134,7 @@ public final class MainWindow extends JFrame {
         qualityValueLabel = new JLabel("80%");
 
         qualitySlider.addChangeListener(event ->
-                qualityValueLabel.setText(
-                        qualitySlider.getValue() + "%"));
+                qualityValueLabel.setText(qualitySlider.getValue() + "%"));
 
         widthField = new JTextField(5);
         heightField = new JTextField(5);
@@ -145,9 +161,26 @@ public final class MainWindow extends JFrame {
         controls.add(preserveAspectRatioCheckBox);
         controls.add(selectedFileLabel);
 
-        root.add(controls, BorderLayout.SOUTH);
+        return controls;
+    }
 
-        return root;
+    private JPanel createResultsPanel() {
+        JPanel panel = new JPanel(new GridLayout(2, 3, 10, 5));
+        panel.setBorder(BorderFactory.createTitledBorder("Compression results"));
+
+        originalSizeLabel = new JLabel("Original size: -");
+        compressedSizeLabel = new JLabel("Compressed size: -");
+        bytesSavedLabel = new JLabel("Bytes saved: -");
+        reductionLabel = new JLabel("Size reduction: -");
+        ratioLabel = new JLabel("Compression ratio: -");
+
+        panel.add(originalSizeLabel);
+        panel.add(compressedSizeLabel);
+        panel.add(bytesSavedLabel);
+        panel.add(reductionLabel);
+        panel.add(ratioLabel);
+
+        return panel;
     }
 
     private JPanel createOriginalPreview() {
@@ -302,8 +335,7 @@ public final class MainWindow extends JFrame {
             try {
                 ImageValidator.validateImage(file);
 
-                BufferedImage loadedImage =
-                        ImageLoader.loadImage(file);
+                BufferedImage loadedImage = ImageLoader.loadImage(file);
 
                 selectedImageFile = file;
                 originalImage = loadedImage;
@@ -322,6 +354,7 @@ public final class MainWindow extends JFrame {
                 heightField.setText(String.valueOf(originalImage.getHeight()));
                 updatingDimensions = false;
 
+                resetResults();
                 updateOriginalPreview();
 
             } catch (IllegalArgumentException | IOException exception) {
@@ -350,7 +383,6 @@ public final class MainWindow extends JFrame {
 
         try {
             int quality = qualitySlider.getValue();
-
             int width = Integer.parseInt(widthField.getText().trim());
             int height = Integer.parseInt(heightField.getText().trim());
 
@@ -374,6 +406,7 @@ public final class MainWindow extends JFrame {
             compressedImage = result.getCompressedPreview();
 
             updateCompressedPreview();
+            updateResults(result.getMetrics());
             saveButton.setEnabled(true);
 
         } catch (NumberFormatException exception) {
@@ -392,6 +425,47 @@ public final class MainWindow extends JFrame {
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    private void updateResults(CompressionMetrics metrics) {
+        originalSizeLabel.setText(
+                "Original size: " + formatBytes(metrics.getOriginalBytes()));
+
+        compressedSizeLabel.setText(
+                "Compressed size: " + formatBytes(metrics.getCompressedBytes()));
+
+        bytesSavedLabel.setText(
+                "Bytes saved: " + formatBytes(metrics.getBytesSaved()));
+
+        reductionLabel.setText(String.format(
+                "Size reduction: %.2f%%", metrics.getReductionPercent()));
+
+        double ratio = metrics.getCompressionRatio();
+
+        ratioLabel.setText(Double.isNaN(ratio)
+                ? "Compression ratio: N/A"
+                : String.format("Compression ratio: %.2f:1", ratio));
+    }
+
+    private void resetResults() {
+        originalSizeLabel.setText("Original size: -");
+        compressedSizeLabel.setText("Compressed size: -");
+        bytesSavedLabel.setText("Bytes saved: -");
+        reductionLabel.setText("Size reduction: -");
+        ratioLabel.setText("Compression ratio: -");
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 0) {
+            return "-" + formatBytes(-bytes);
+        }
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        if (bytes < 1024 * 1024) {
+            return String.format("%.2f KB", bytes / 1024.0);
+        }
+        return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
     }
 
     private void saveCompressedImage() {
