@@ -1,10 +1,10 @@
 
 package com.csc360.gui;
 
+import com.csc360.compression.CompressionMetrics;
 import com.csc360.compression.ImageProcessingOptions;
 import com.csc360.compression.ImageProcessingResult;
 import com.csc360.compression.ImageProcessingService;
-import com.csc360.compression.CompressionMetrics;
 import com.csc360.imageprocessing.ImageLoader;
 import com.csc360.utils.ImageValidator;
 
@@ -31,6 +31,7 @@ import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import javax.swing.SwingWorker;
 import javax.swing.WindowConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -59,6 +60,8 @@ public final class MainWindow extends JFrame {
     private JTextField heightField;
     private JCheckBox preserveAspectRatioCheckBox;
 
+    private JButton browseButton;
+    private JButton compressButton;
     private JButton saveButton;
 
     private JLabel originalSizeLabel;
@@ -113,10 +116,10 @@ public final class MainWindow extends JFrame {
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT));
         controls.setBorder(BorderFactory.createTitledBorder("Image settings"));
 
-        JButton browseButton = new JButton("Browse Image");
+        browseButton = new JButton("Browse Image");
         browseButton.addActionListener(event -> selectImage());
 
-        JButton compressButton = new JButton("Compress Image");
+        compressButton = new JButton("Compress Image");
         compressButton.addActionListener(event -> compressImage());
 
         saveButton = new JButton("Save As");
@@ -147,17 +150,13 @@ public final class MainWindow extends JFrame {
         controls.add(browseButton);
         controls.add(compressButton);
         controls.add(saveButton);
-
         controls.add(new JLabel("Quality:"));
         controls.add(qualitySlider);
         controls.add(qualityValueLabel);
-
         controls.add(new JLabel("Width:"));
         controls.add(widthField);
-
         controls.add(new JLabel("Height:"));
         controls.add(heightField);
-
         controls.add(preserveAspectRatioCheckBox);
         controls.add(selectedFileLabel);
 
@@ -224,41 +223,39 @@ public final class MainWindow extends JFrame {
     }
 
     private void addDimensionListeners() {
-        widthField.getDocument().addDocumentListener(
-                new DocumentListener() {
-                    @Override
-                    public void insertUpdate(DocumentEvent event) {
-                        updateHeightFromWidth();
-                    }
+        widthField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                updateHeightFromWidth();
+            }
 
-                    @Override
-                    public void removeUpdate(DocumentEvent event) {
-                        updateHeightFromWidth();
-                    }
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                updateHeightFromWidth();
+            }
 
-                    @Override
-                    public void changedUpdate(DocumentEvent event) {
-                        updateHeightFromWidth();
-                    }
-                });
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                updateHeightFromWidth();
+            }
+        });
 
-        heightField.getDocument().addDocumentListener(
-                new DocumentListener() {
-                    @Override
-                    public void insertUpdate(DocumentEvent event) {
-                        updateWidthFromHeight();
-                    }
+        heightField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                updateWidthFromHeight();
+            }
 
-                    @Override
-                    public void removeUpdate(DocumentEvent event) {
-                        updateWidthFromHeight();
-                    }
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                updateWidthFromHeight();
+            }
 
-                    @Override
-                    public void changedUpdate(DocumentEvent event) {
-                        updateWidthFromHeight();
-                    }
-                });
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                updateWidthFromHeight();
+            }
+        });
     }
 
     private void updateHeightFromWidth() {
@@ -329,44 +326,52 @@ public final class MainWindow extends JFrame {
 
         int result = fileChooser.showOpenDialog(this);
 
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
+        if (result != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
 
-            try {
-                ImageValidator.validateImage(file);
+        File file = fileChooser.getSelectedFile();
 
-                BufferedImage loadedImage = ImageLoader.loadImage(file);
+        try {
+            ImageValidator.validateImage(file);
 
-                selectedImageFile = file;
-                originalImage = loadedImage;
+            BufferedImage loadedImage = ImageLoader.loadImage(file);
 
-                compressedImage = null;
-                compressedResult = null;
-                saveButton.setEnabled(false);
+            selectedImageFile = file;
+            originalImage = loadedImage;
 
-                compressedPreviewLabel.setIcon(null);
-                compressedPreviewLabel.setText("No compressed image yet");
+            compressedImage = null;
+            compressedResult = null;
+            saveButton.setEnabled(false);
 
-                selectedFileLabel.setText(file.getName());
+            compressedPreviewLabel.setIcon(null);
+            compressedPreviewLabel.setText("No compressed image yet");
 
-                updatingDimensions = true;
-                widthField.setText(String.valueOf(originalImage.getWidth()));
-                heightField.setText(String.valueOf(originalImage.getHeight()));
-                updatingDimensions = false;
+            selectedFileLabel.setText(file.getName());
 
-                resetResults();
-                updateOriginalPreview();
+            updatingDimensions = true;
+            widthField.setText(String.valueOf(originalImage.getWidth()));
+            heightField.setText(String.valueOf(originalImage.getHeight()));
+            updatingDimensions = false;
 
-            } catch (IllegalArgumentException | IOException exception) {
-                updatingDimensions = false;
+            resetResults();
+            updateOriginalPreview();
 
-                JOptionPane.showMessageDialog(
-                        this,
-                        exception.getMessage(),
-                        "Image Loading Error",
-                        JOptionPane.ERROR_MESSAGE
-                );
-            }
+        } catch (IllegalArgumentException exception) {
+            updatingDimensions = false;
+            showError("Invalid Image",
+                    "Please select a supported and valid image.", exception);
+
+        } catch (IOException exception) {
+            updatingDimensions = false;
+            showError("Image Loading Error",
+                    "The selected image could not be opened.", exception);
+
+        } catch (Exception exception) {
+            updatingDimensions = false;
+            showError("Unexpected Error",
+                    "An unexpected error occurred while loading the image.",
+                    exception);
         }
     }
 
@@ -381,6 +386,8 @@ public final class MainWindow extends JFrame {
             return;
         }
 
+        final ImageProcessingOptions options;
+
         try {
             int quality = qualitySlider.getValue();
             int width = Integer.parseInt(widthField.getText().trim());
@@ -391,39 +398,97 @@ public final class MainWindow extends JFrame {
                         "Width and height must be greater than zero.");
             }
 
-            ImageProcessingOptions options =
-                    ImageProcessingOptions.resized(
-                            quality,
-                            width,
-                            height,
-                            preserveAspectRatioCheckBox.isSelected()
-                    );
-
-            ImageProcessingResult result =
-                    processingService.process(selectedImageFile, options);
-
-            compressedResult = result;
-            compressedImage = result.getCompressedPreview();
-
-            updateCompressedPreview();
-            updateResults(result.getMetrics());
-            saveButton.setEnabled(true);
+            options = ImageProcessingOptions.resized(
+                    quality,
+                    width,
+                    height,
+                    preserveAspectRatioCheckBox.isSelected()
+            );
 
         } catch (NumberFormatException exception) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Please enter valid numeric width and height values.",
-                    "Invalid Dimensions",
-                    JOptionPane.ERROR_MESSAGE
-            );
+            showError("Invalid Dimensions",
+                    "Enter valid numeric width and height values.", exception);
+            return;
 
-        } catch (IOException | IllegalArgumentException exception) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    exception.getMessage(),
-                    "Compression Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+        } catch (IllegalArgumentException exception) {
+            showError("Invalid Image Settings",
+                    "Please check the selected image settings.", exception);
+            return;
+        }
+
+        setProcessingState(true);
+
+        SwingWorker<ImageProcessingResult, Void> worker =
+                new SwingWorker<>() {
+
+            @Override
+            protected ImageProcessingResult doInBackground()
+                    throws Exception {
+                return processingService.process(selectedImageFile, options);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    ImageProcessingResult result = get();
+
+                    compressedResult = result;
+                    compressedImage = result.getCompressedPreview();
+
+                    updateCompressedPreview();
+                    updateResults(result.getMetrics());
+                    saveButton.setEnabled(true);
+
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    showError("Compression Interrupted",
+                            "The compression operation was interrupted.",
+                            exception);
+
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    Throwable cause = exception.getCause();
+
+                    if (cause instanceof IllegalArgumentException) {
+                        showError("Invalid Image Settings",
+                                "Please check your image and dimensions.",
+                                (Exception) cause);
+                    } else if (cause instanceof IOException) {
+                        showError("Compression Failed",
+                                "The selected image could not be compressed.",
+                                (Exception) cause);
+                    } else {
+                        showUnexpectedError("Compression", cause);
+                    }
+
+                } catch (Exception exception) {
+                    showError("Compression Failed",
+                            "An unexpected error occurred during compression.",
+                            exception);
+
+                } finally {
+                    setProcessingState(false);
+                }
+            }
+        };
+
+        worker.execute();
+    }
+
+    private void setProcessingState(boolean processing) {
+        browseButton.setEnabled(!processing);
+        compressButton.setEnabled(!processing);
+        saveButton.setEnabled(!processing && compressedResult != null);
+        qualitySlider.setEnabled(!processing);
+        widthField.setEnabled(!processing);
+        heightField.setEnabled(!processing);
+        preserveAspectRatioCheckBox.setEnabled(!processing);
+
+        if (processing) {
+            selectedFileLabel.setText("Processing image...");
+        } else if (selectedImageFile != null) {
+            selectedFileLabel.setText(selectedImageFile.getName());
+        } else {
+            selectedFileLabel.setText("No image selected");
         }
     }
 
@@ -551,14 +616,46 @@ public final class MainWindow extends JFrame {
             );
 
         } catch (IOException exception) {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Could not save the compressed image:\n"
-                            + exception.getMessage(),
-                    "Save Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
+            showError("Save Failed",
+                    "Could not write the compressed image. Check the destination.",
+                    exception);
+
+        } catch (Exception exception) {
+            showError("Unexpected Save Error",
+                    "An unexpected error occurred while saving the image.",
+                    exception);
         }
+    }
+
+    private void showError(String title, String message, Exception exception) {
+        String details = exception.getMessage();
+
+        if (details == null || details.isBlank()) {
+            details = "An unexpected error occurred. Please try again.";
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                message + "\n\nDetails: " + details,
+                title,
+                JOptionPane.ERROR_MESSAGE
+        );
+    }
+
+    private void showUnexpectedError(String operation, Throwable cause) {
+        String details = cause == null ? null : cause.getMessage();
+
+        if (details == null || details.isBlank()) {
+            details = "An unexpected error occurred.";
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                "An unexpected error occurred during " + operation
+                        + ".\n\nDetails: " + details,
+                "Unexpected Error",
+                JOptionPane.ERROR_MESSAGE
+        );
     }
 
     private void updateOriginalPreview() {
