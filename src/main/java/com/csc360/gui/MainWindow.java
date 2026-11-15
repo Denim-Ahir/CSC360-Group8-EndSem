@@ -24,6 +24,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JSlider;
 import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -43,6 +44,9 @@ public final class MainWindow extends JFrame {
     private JPanel compressedPreviewPanel;
     private JLabel compressedPreviewLabel;
     private BufferedImage compressedImage;
+
+    private JSlider qualitySlider;
+    private JLabel qualityValueLabel;
 
     private final ImageProcessingService processingService =
             new ImageProcessingService();
@@ -85,8 +89,23 @@ public final class MainWindow extends JFrame {
 
         selectedFileLabel = new JLabel("No image selected");
 
+        qualitySlider = new JSlider(10, 100, 80);
+        qualitySlider.setMajorTickSpacing(10);
+        qualitySlider.setMinorTickSpacing(5);
+        qualitySlider.setPaintTicks(true);
+        qualitySlider.setPaintLabels(true);
+
+        qualityValueLabel = new JLabel("80%");
+
+        qualitySlider.addChangeListener(event ->
+                qualityValueLabel.setText(
+                        qualitySlider.getValue() + "%"));
+
         controls.add(browseButton);
         controls.add(compressButton);
+        controls.add(new JLabel("Quality:"));
+        controls.add(qualitySlider);
+        controls.add(qualityValueLabel);
         controls.add(selectedFileLabel);
 
         root.add(controls, BorderLayout.SOUTH);
@@ -191,8 +210,11 @@ public final class MainWindow extends JFrame {
         }
 
         try {
+            int selectedQuality = qualitySlider.getValue();
+
             ImageProcessingResult result =
-                    processingService.process(selectedImageFile, 60);
+                    processingService.process(
+                            selectedImageFile, selectedQuality);
 
             compressedImage = result.getCompressedPreview();
 
