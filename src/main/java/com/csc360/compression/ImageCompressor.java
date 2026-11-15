@@ -61,7 +61,11 @@ public final class ImageCompressor {
             writer.write(null, new IIOImage(ImageConverter.convertToRGB(image), null, null),
                     parameters);
             imageStream.flush();
-            return byteStream.toByteArray();
+            byte[] encoded = byteStream.toByteArray();
+            if (encoded.length == 0) {
+                throw new IOException("The JPEG writer produced no image data.");
+            }
+            return encoded;
         } finally {
             writer.dispose();
         }

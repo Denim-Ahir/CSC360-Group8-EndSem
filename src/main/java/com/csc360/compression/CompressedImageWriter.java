@@ -42,6 +42,9 @@ public final class CompressedImageWriter {
             throw new IOException("The destination must be inside a folder.");
         }
         Files.createDirectories(parent);
+        if (!Files.isWritable(parent)) {
+            throw new IOException("The destination folder is not writable.");
+        }
         if (Files.isDirectory(target)) {
             throw new IOException("The selected destination is a folder.");
         }
