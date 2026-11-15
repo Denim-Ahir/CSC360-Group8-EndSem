@@ -16,6 +16,7 @@ import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
@@ -57,6 +58,9 @@ public final class MainWindow extends JFrame {
     private JTextField heightField;
     private JCheckBox preserveAspectRatioCheckBox;
 
+    private JButton saveButton;
+
+    private ImageProcessingResult compressedResult;
     private boolean updatingDimensions;
 
     private final ImageProcessingService processingService =
@@ -98,6 +102,10 @@ public final class MainWindow extends JFrame {
         JButton compressButton = new JButton("Compress Image");
         compressButton.addActionListener(event -> compressImage());
 
+        saveButton = new JButton("Save As");
+        saveButton.setEnabled(false);
+        saveButton.addActionListener(event -> saveCompressedImage());
+
         selectedFileLabel = new JLabel("No image selected");
 
         qualitySlider = new JSlider(10, 100, 80);
@@ -122,6 +130,7 @@ public final class MainWindow extends JFrame {
 
         controls.add(browseButton);
         controls.add(compressButton);
+        controls.add(saveButton);
 
         controls.add(new JLabel("Quality:"));
         controls.add(qualitySlider);
@@ -300,6 +309,9 @@ public final class MainWindow extends JFrame {
                 originalImage = loadedImage;
 
                 compressedImage = null;
+                compressedResult = null;
+                saveButton.setEnabled(false);
+
                 compressedPreviewLabel.setIcon(null);
                 compressedPreviewLabel.setText("No compressed image yet");
 
@@ -358,9 +370,11 @@ public final class MainWindow extends JFrame {
             ImageProcessingResult result =
                     processingService.process(selectedImageFile, options);
 
+            compressedResult = result;
             compressedImage = result.getCompressedPreview();
 
             updateCompressedPreview();
+            saveButton.setEnabled(true);
 
         } catch (NumberFormatException exception) {
             JOptionPane.showMessageDialog(
@@ -375,6 +389,99 @@ public final class MainWindow extends JFrame {
                     this,
                     exception.getMessage(),
                     "Compression Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private void saveCompressedImage() {
+        if (compressedResult == null || selectedImageFile == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Please compress an image before saving.",
+                    "No Compressed Image",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        String originalName = selectedImageFile.getName();
+        int extensionIndex = originalName.lastIndexOf('.');
+
+        String baseName = extensionIndex > 0
+                ? originalName.substring(0, extensionIndex)
+                : originalName;
+
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Save Compressed Image");
+        fileChooser.setFileFilter(
+                new FileNameExtensionFilter("JPEG Image (*.jpg)", "jpg"));
+
+        fileChooser.setSelectedFile(
+                new File(baseName + "_compressed.jpg"));
+
+        int result = fileChooser.showSaveDialog(this);
+
+        if (result != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File destination = fileChooser.getSelectedFile();
+        String destinationName = destination.getName();
+
+        int destinationExtension = destinationName.lastIndexOf('.');
+        if (destinationExtension > 0) {
+            destinationName =
+                    destinationName.substring(0, destinationExtension);
+        }
+
+        destination = new File(
+                destination.getParentFile(),
+                destinationName + ".jpg");
+
+        try {
+            if (destination.getCanonicalFile().equals(
+                    selectedImageFile.getCanonicalFile())) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "You cannot overwrite the original image. "
+                                + "Choose a different filename.",
+                        "Original Image Protected",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            if (destination.exists()) {
+                int overwriteChoice = JOptionPane.showConfirmDialog(
+                        this,
+                        "This file already exists. Do you want to replace it?",
+                        "Confirm Overwrite",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE
+                );
+
+                if (overwriteChoice != JOptionPane.YES_OPTION) {
+                    return;
+                }
+            }
+
+            Files.write(destination.toPath(), compressedResult.getJpegBytes());
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Compressed image saved successfully:\n"
+                            + destination.getAbsolutePath(),
+                    "Image Saved",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+        } catch (IOException exception) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Could not save the compressed image:\n"
+                            + exception.getMessage(),
+                    "Save Error",
                     JOptionPane.ERROR_MESSAGE
             );
         }
