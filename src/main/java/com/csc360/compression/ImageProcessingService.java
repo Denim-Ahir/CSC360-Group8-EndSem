@@ -2,6 +2,7 @@ package com.csc360.compression;
 
 import com.csc360.imageprocessing.ImageConverter;
 import com.csc360.imageprocessing.ImageLoader;
+import com.csc360.imageprocessing.ImageResizer;
 import com.csc360.utils.ImageValidator;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -15,7 +16,7 @@ import javax.imageio.ImageIO;
 public final class ImageProcessingService {
 
     public ImageProcessingResult process(File source, int qualityPercent) throws IOException {
-        return process(source, new ImageProcessingOptions(qualityPercent));
+        return process(source, ImageProcessingOptions.originalSize(qualityPercent));
     }
 
     public ImageProcessingResult process(File source, ImageProcessingOptions options)
@@ -26,7 +27,15 @@ public final class ImageProcessingService {
         ImageValidator.validateImage(source);
 
         BufferedImage sourceImage = ImageLoader.loadImage(source);
-        BufferedImage jpegReadyImage = ImageConverter.convertToRGB(sourceImage);
+        BufferedImage processedImage = sourceImage;
+        if (options.resizeEnabled()) {
+            processedImage = options.preserveAspectRatio()
+                    ? ImageResizer.resizeImagePreservingAspectRatio(sourceImage,
+                            options.targetWidth())
+                    : ImageResizer.resizeImage(sourceImage, options.targetWidth(),
+                            options.targetHeight());
+        }
+        BufferedImage jpegReadyImage = ImageConverter.convertToRGB(processedImage);
         byte[] jpegBytes = ImageCompressor.compressToJpeg(jpegReadyImage,
                 options.qualityPercent());
         BufferedImage compressedPreview = ImageIO.read(new ByteArrayInputStream(jpegBytes));
